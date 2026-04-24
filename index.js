@@ -19,15 +19,22 @@ const orderStates = {};
 async function getMenuFromApp() {
     try {
         if (!FIREBASE_URL) {
-            console.error("FIREBASE_URL is not defined.");
+            console.error("FIREBASE_URL is not defined in environment variables.");
             return [];
         }
 
-        // Assuming your Firebase path for the menu (updated to match admin panel)
-        const response = await fetch(`${FIREBASE_URL}/dishes.json`); 
+        // Clean the URL to avoid double slashes
+        const baseUrl = FIREBASE_URL.endsWith('/') ? FIREBASE_URL.slice(0, -1) : FIREBASE_URL;
+        
+        // Fetch from dishes.json (matching your admin panel)
+        console.log(`Fetching menu from: ${baseUrl}/dishes.json`);
+        const response = await fetch(`${baseUrl}/dishes.json`); 
         const data = await response.json();
         
-        if (!data) return [];
+        if (!data) {
+            console.log("No data found in 'dishes' path.");
+            return [];
+        }
 
         // Convert Firebase object into an array
         return Object.keys(data).map(key => ({
