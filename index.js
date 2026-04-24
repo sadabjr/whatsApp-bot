@@ -152,7 +152,7 @@ async function startBot() {
             await sock.sendPresenceUpdate('composing', from);
             
             const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
             
             const prompt = `You are the official AI assistant for "Digita Marketing", a premier Digital Marketing Agency based in Gorakhpur and Lucknow.
             
