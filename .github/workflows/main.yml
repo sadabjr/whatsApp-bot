@@ -23,5 +23,5 @@ jobs:
       - name: Start AI Bot
         env:
           FIREBASE_URL: ${{ secrets.FIREBASE_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: npm start

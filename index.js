@@ -6,7 +6,7 @@ const {
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// No AI SDK needed — Groq uses a simple REST API via native fetch
 
 // SECURE FIREBASE URL FROM GITHUB SECRETS OR ENVIRONMENT VARIABLES
 // Note: If running locally, you can set this in your shell or use a .env file
@@ -142,36 +142,47 @@ async function startBot() {
             return;
         }
 
-        // 3. If no menu/service match, use Gemini AI
+        // 3. If no menu/service match, use Groq AI (Free, Fast, Llama 3)
         try {
-            if (!process.env.GEMINI_API_KEY) {
+            if (!process.env.GROQ_API_KEY) {
                 await sock.sendMessage(from, { text: "Hello! I am the Digita Marketing Assistant. Type 'menu' to see our services." });
                 return;
             }
-            
+
             await sock.sendPresenceUpdate('composing', from);
-            
-            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-            
-            const prompt = `You are the official AI assistant for "Digita Marketing", a premier Digital Marketing Agency based in Gorakhpur and Lucknow.
-            
-            USE THIS BUSINESS KNOWLEDGE TO ANSWER:
-            - Services: AI SEO & AEO (Answer Engine Optimization for chatbots), SEO, Google/Meta Ads, Social Media Marketing, Web Development, and Marketing Automation.
-            - Focus: We specialize in "AI Search Readiness" (Google AI Overviews, ChatGPT, Gemini).
-            - Locations: Offices in Gorakhpur (Ghosh Company Chowk) and Lucknow.
-            - Contact: Email digitamarketing90@gmail.com, Phone +91 9305243187.
-            - Tone: Professional and expert.
-            
-            Keep answers very short (2-3 sentences max). Encourage users to type "menu" for pricing.
-            The customer says: "${body}"`;
-            
-            const result = await model.generateContent(prompt);
-            const responseText = result.response.text();
-            
+
+            const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'llama3-8b-8192',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are the official AI assistant for "Digita Marketing", a premier Digital Marketing Agency.
+- Services: AI SEO, AEO, Google/Meta Ads, Social Media Marketing, Web Development, Marketing Automation.
+- Locations: Gorakhpur (Ghosh Company Chowk) and Lucknow.
+- Contact: digitamarketing90@gmail.com | +91 9305243187.
+Keep replies short (2-3 sentences). Encourage users to type "menu" for pricing.`
+                        },
+                        {
+                            role: 'user',
+                            content: body
+                        }
+                    ],
+                    max_tokens: 150
+                })
+            });
+
+            const groqData = await groqResponse.json();
+            const responseText = groqData.choices?.[0]?.message?.content || 'Sorry, I could not process your request right now.';
+
             await sock.sendMessage(from, { text: responseText });
         } catch (err) {
-            console.error("Gemini AI Error:", err);
+            console.error("Groq AI Error:", err);
         }
     });
 }
