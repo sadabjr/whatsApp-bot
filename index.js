@@ -142,14 +142,15 @@ async function startBot() {
             return;
         }
 
-        // 3. If no menu/service match, use Groq AI (Free, Fast, Llama 3)
+        // 3. If no menu/service match, use Groq AI (Llama 3)
         try {
             if (!process.env.GROQ_API_KEY) {
-                await sock.sendMessage(from, { text: "Hello! I am the Digita Marketing Assistant. Type 'menu' to see our services." });
-                return;
+                console.error('[AI] GROQ_API_KEY is not set in environment.');
+                throw new Error('Missing API key');
             }
 
             await sock.sendPresenceUpdate('composing', from);
+            console.log(`[AI] Calling Groq for: "${body}"`);
 
             const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
@@ -162,29 +163,68 @@ async function startBot() {
                     messages: [
                         {
                             role: 'system',
-                            content: `You are the official AI assistant for "Digita Marketing", a premier Digital Marketing Agency.
-- Services: AI SEO, AEO, Google/Meta Ads, Social Media Marketing, Web Development, Marketing Automation.
-- Locations: Gorakhpur (Ghosh Company Chowk) and Lucknow.
-- Contact: digitamarketing90@gmail.com | +91 9305243187.
-Keep replies short (2-3 sentences). Encourage users to type "menu" for pricing.`
+                            content: `You are the AI assistant for "Digita Marketing", a digital marketing agency in India.
+Services: SEO, AEO, Google Ads, Meta Ads, Social Media Marketing, Web Development, Marketing Automation.
+Offices in Gorakhpur (Ghosh Company Chowk) and Lucknow.
+Contact: digitamarketing90@gmail.com | +91 9305243187 | www.digitamarketing.in
+Keep replies under 3 sentences. If user asks about pricing, tell them to type "menu".`
                         },
-                        {
-                            role: 'user',
-                            content: body
-                        }
+                        { role: 'user', content: body }
                     ],
-                    max_tokens: 150
+                    max_tokens: 200
                 })
             });
 
-            const groqData = await groqResponse.json();
-            const responseText = groqData.choices?.[0]?.message?.content || 'Sorry, I could not process your request right now.';
+            console.log(`[AI] Groq response status: ${groqResponse.status}`);
 
-            await sock.sendMessage(from, { text: responseText });
+            if (!groqResponse.ok) {
+                const errBody = await groqResponse.text();
+                console.error(`[AI] Groq error body: ${errBody}`);
+                throw new Error(`Groq HTTP ${groqResponse.status}`);
+            }
+
+            const groqData = await groqResponse.json();
+            const responseText = groqData.choices?.[0]?.message?.content;
+
+            if (!responseText) {
+                console.error('[AI] Groq returned empty choices:', JSON.stringify(groqData));
+                throw new Error('Empty Groq response');
+            }
+
+            console.log(`[AI] Groq reply: "${responseText.substring(0, 80)}"`);
+            await sock.sendMessage(from, { text: responseText.trim() });
+
         } catch (err) {
-            console.error("Groq AI Error:", err);
+            console.error('[AI] Error, using smart fallback:', err.message);
+
+            // Smart keyword fallback — always gives a useful response
+            const lc = lowercaseBody;
+            let fallback = '';
+
+            if (lc.includes('hi') || lc.includes('hello') || lc.includes('hey') || lc.includes('hlo')) {
+                fallback = `👋 Hello! Welcome to *Digita Marketing*.\n\nWe help businesses grow online with SEO, Google Ads, Social Media & more.\n\nType *menu* to see all our services! 🚀`;
+            } else if (lc.includes('price') || lc.includes('cost') || lc.includes('rate') || lc.includes('charge') || lc.includes('fee')) {
+                fallback = `💰 Our pricing depends on the service package you choose.\n\nType *menu* to see all services, then reply with the service name for full pricing details!`;
+            } else if (lc.includes('seo')) {
+                fallback = `🔍 *SEO* helps your business rank higher on Google. We specialize in AI SEO & AEO for future-proof rankings.\n\nType *menu* for pricing!`;
+            } else if (lc.includes('social') || lc.includes('instagram') || lc.includes('facebook')) {
+                fallback = `📱 Our *Social Media Marketing* service grows your brand on Instagram & Facebook.\n\nType *menu* to see our packages!`;
+            } else if (lc.includes('ads') || lc.includes('google') || lc.includes('meta')) {
+                fallback = `🎯 We run high-converting *Google Ads & Meta Ads* campaigns.\n\nType *menu* to see our advertising packages!`;
+            } else if (lc.includes('web') || lc.includes('website') || lc.includes('design')) {
+                fallback = `💻 We build professional, SEO-optimized *websites*.\n\nType *menu* to see our Web Development packages!`;
+            } else if (lc.includes('contact') || lc.includes('call') || lc.includes('reach') || lc.includes('number') || lc.includes('email')) {
+                fallback = `📞 *Contact Digita Marketing:*\n\n📧 digitamarketing90@gmail.com\n📱 +91 9305243187\n🌐 www.digitamarketing.in\n\n🏢 Offices in Gorakhpur & Lucknow`;
+            } else if (lc.includes('location') || lc.includes('office') || lc.includes('address') || lc.includes('gorakhpur') || lc.includes('lucknow')) {
+                fallback = `📍 *Our Offices:*\n\n🏢 Gorakhpur — Ghosh Company Chowk\n🏢 Lucknow\n\n📱 +91 9305243187`;
+            } else {
+                fallback = `🤖 Hi! I'm the *Digita Marketing* AI Assistant.\n\nType *menu* to see our services, or ask about SEO, Ads, Social Media, or Web Development!`;
+            }
+
+            await sock.sendMessage(from, { text: fallback });
         }
     });
 }
 
 startBot().catch(err => console.error("Critical error in startBot:", err));
+
