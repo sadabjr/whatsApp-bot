@@ -23,8 +23,8 @@ async function getMenuFromApp() {
             return [];
         }
 
-        // Assuming your Firebase path for the menu
-        const response = await fetch(`${FIREBASE_URL}/menu.json`); 
+        // Assuming your Firebase path for the menu (updated to match admin panel)
+        const response = await fetch(`${FIREBASE_URL}/dishes.json`); 
         const data = await response.json();
         
         if (!data) return [];
