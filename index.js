@@ -6,6 +6,7 @@ const {
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // SECURE FIREBASE URL FROM GITHUB SECRETS OR ENVIRONMENT VARIABLES
 // Note: If running locally, you can set this in your shell or use a .env file
@@ -113,6 +114,32 @@ async function startBot() {
             menuText += "Reply with the name of the item to start your order!";
             
             await sock.sendMessage(from, { text: menuText });
+        } else {
+            try {
+                if (!process.env.GEMINI_API_KEY) {
+                    // Fallback if AI key is missing
+                    await sock.sendMessage(from, { text: "Hello! I am the Digita Marketing Assistant. Please type 'menu' to see our services." });
+                    return;
+                }
+                
+                // Show "typing..." indicator on WhatsApp
+                await sock.sendPresenceUpdate('composing', from);
+                
+                const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                
+                // Provide context to the AI about who it is
+                const prompt = `You are a helpful, professional customer service agent for a digital agency named "Digita Marketing". 
+                Keep your answers very short, concise, and friendly. Do not use markdown that WhatsApp doesn't support well.
+                The customer says: "${body}"`;
+                
+                const result = await model.generateContent(prompt);
+                const responseText = result.response.text();
+                
+                await sock.sendMessage(from, { text: responseText });
+            } catch (err) {
+                console.error("Gemini AI Error:", err);
+            }
         }
     });
 }
