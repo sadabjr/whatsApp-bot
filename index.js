@@ -98,48 +98,80 @@ async function startBot() {
 
         const from = msg.key.remoteJid;
         const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        const lowercaseBody = body.toLowerCase().trim();
 
-        // Example: Show menu when someone says "menu"
-        if (body.toLowerCase() === 'menu') {
+        // 1. Show the full menu list
+        if (lowercaseBody === 'menu') {
             const menu = await getMenuFromApp();
             if (menu.length === 0) {
-                await sock.sendMessage(from, { text: "The menu is currently empty or unavailable." });
+                await sock.sendMessage(from, { text: "The service list is currently empty." });
                 return;
             }
 
-            let menuText = "*🌟 Digita MARKETING MENU 🌟*\n\n";
+            let menuText = "*🌟 DIGITA MARKETING SERVICES 🌟*\n\n";
             menu.forEach((item, index) => {
-                menuText += `*${index + 1}. ${item.name}*\nPrice: ${item.price}\n\n`;
+                menuText += `*${index + 1}. ${item.name}*\n`;
             });
-            menuText += "Reply with the name of the item to start your order!";
+            menuText += "\nReply with the *Name* of the service to see full details and pricing!";
             
             await sock.sendMessage(from, { text: menuText });
-        } else {
-            try {
-                if (!process.env.GEMINI_API_KEY) {
-                    // Fallback if AI key is missing
-                    await sock.sendMessage(from, { text: "Hello! I am the Digita Marketing Assistant. Please type 'menu' to see our services." });
-                    return;
-                }
-                
-                // Show "typing..." indicator on WhatsApp
-                await sock.sendPresenceUpdate('composing', from);
-                
-                const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                
-                // Provide context to the AI about who it is
-                const prompt = `You are a helpful, professional customer service agent for a digital agency named "Digita Marketing". 
-                Keep your answers very short, concise, and friendly. Do not use markdown that WhatsApp doesn't support well.
-                The customer says: "${body}"`;
-                
-                const result = await model.generateContent(prompt);
-                const responseText = result.response.text();
-                
-                await sock.sendMessage(from, { text: responseText });
-            } catch (err) {
-                console.error("Gemini AI Error:", err);
+            return;
+        }
+
+        // 2. Check if the user is asking for a specific service detail (e.g., "SEO")
+        const menu = await getMenuFromApp();
+        const selectedItem = menu.find(item => item.name.toLowerCase() === lowercaseBody);
+
+        if (selectedItem) {
+            // Show typing indicator
+            await sock.sendPresenceUpdate('composing', from);
+
+            const detailMessage = `*${selectedItem.name.toUpperCase()}*\n\n` +
+                                 `💰 *Price:* ${selectedItem.price}\n\n` +
+                                 `Interested? Reply with "Order" to get started with this service!`;
+
+            // Send Image + Caption
+            if (selectedItem.imageUrl) {
+                await sock.sendMessage(from, { 
+                    image: { url: selectedItem.imageUrl }, 
+                    caption: detailMessage 
+                });
+            } else {
+                await sock.sendMessage(from, { text: detailMessage });
             }
+            return;
+        }
+
+        // 3. If no menu/service match, use Gemini AI
+        try {
+            if (!process.env.GEMINI_API_KEY) {
+                await sock.sendMessage(from, { text: "Hello! I am the Digita Marketing Assistant. Type 'menu' to see our services." });
+                return;
+            }
+            
+            await sock.sendPresenceUpdate('composing', from);
+            
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            
+            const prompt = `You are the official AI assistant for "Digita Marketing", a premier Digital Marketing Agency based in Gorakhpur and Lucknow.
+            
+            USE THIS BUSINESS KNOWLEDGE TO ANSWER:
+            - Services: AI SEO & AEO (Answer Engine Optimization for chatbots), SEO, Google/Meta Ads, Social Media Marketing, Web Development, and Marketing Automation.
+            - Focus: We specialize in "AI Search Readiness" (Google AI Overviews, ChatGPT, Gemini).
+            - Locations: Offices in Gorakhpur (Ghosh Company Chowk) and Lucknow.
+            - Contact: Email digitamarketing90@gmail.com, Phone +91 9305243187.
+            - Tone: Professional and expert.
+            
+            Keep answers very short (2-3 sentences max). Encourage users to type "menu" for pricing.
+            The customer says: "${body}"`;
+            
+            const result = await model.generateContent(prompt);
+            const responseText = result.response.text();
+            
+            await sock.sendMessage(from, { text: responseText });
+        } catch (err) {
+            console.error("Gemini AI Error:", err);
         }
     });
 }
